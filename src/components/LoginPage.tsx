@@ -54,18 +54,38 @@ export default function LoginPage({ appState, updateAppState }: LoginPageProps) 
     }
   };
 
-  const handleAdminLogin = (e: React.FormEvent) => {
+  const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Mock admin authentication
-    if (adminEmail === 'admin@sunway.edu.my' && adminPassword === 'admin123') {
-      updateAppState({
-        userRole: 'admin',
-        currentPage: 'admin-dashboard',
+    if (!adminEmail || !adminPassword) {
+      toast.error('Please enter both email and password.');
+      return;
+    }
+
+    try {
+      const response = await fetch('http://localhost:3001/api/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: adminEmail, password: adminPassword }),
       });
-      toast.success('Welcome, Administrator!');
-    } else {
-      toast.error('Invalid admin credentials');
+
+      const data = await response.json();
+
+      if (response.ok) {
+        updateAppState({
+          currentUser: data.user,
+          userRole: 'admin',
+          currentPage: 'admin-dashboard',
+          token: data.token,
+        });
+        toast.success('Welcome, Administrator!');
+      } else {
+        toast.error(data.message || 'Invalid credentials');
+      }
+    } catch (error) {
+      toast.error('Login failed. Please try again.');
+      console.error('Login error:', error);
     }
   };
 
@@ -77,7 +97,7 @@ export default function LoginPage({ appState, updateAppState }: LoginPageProps) 
           <div className="inline-flex items-center justify-center w-16 h-16 bg-[#FF6500] rounded-full mb-4">
             <GraduationCap className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-white mb-2">ClubEngage</h1>
+          <h1 className="text-white mb-2">ClubSun</h1>
           <p className="text-gray-400">Gamified Club Management System</p>
         </div>
 
@@ -179,9 +199,7 @@ export default function LoginPage({ appState, updateAppState }: LoginPageProps) 
         </Card>
 
         {/* Footer */}
-        <p className="text-center text-gray-500 mt-8">
-          © Sunway University 2025
-        </p>
+
       </div>
     </div>
   );

@@ -5,6 +5,7 @@ import { Progress } from './ui/progress';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Badge } from './ui/badge';
 import { Award, LogOut, Search, Trophy, Users } from 'lucide-react';
+import { toast } from 'sonner';
 
 type StudentProfilePageProps = {
   appState: AppState;
@@ -60,13 +61,22 @@ export default function StudentProfilePage({ appState, updateAppState }: Student
         return;
       }
 
-      // Update frontend state with data from backend
+      const newLevel = Math.floor(data.user.total_points / 20) + 1;
+      if (newLevel !== currentUser.level) {
+        toast.info(`📉 Your level has changed to ${newLevel}.`);
+      }
+
+      // Start of bug fix
+      const updatedJoinedClubs = currentUser.joinedClubs.filter(id => id !== clubId);
+
       const updatedUser = {
         ...currentUser,
         totalPoints: data.user.total_points,
+        level: newLevel,
         badge: data.user.badge,
-        joinedClubs: currentUser.joinedClubs.filter(id => id !== clubId), // Remove the left club ID
+        joinedClubs: updatedJoinedClubs, // Use the updated list
       };
+      // End of bug fix
 
       const updatedClubs = clubs.map(c => {
         if (c.id === data.club.id) {

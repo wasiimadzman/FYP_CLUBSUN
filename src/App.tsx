@@ -26,7 +26,7 @@ export type Club = {
   currentMembers: number;
   maxMembers: number;
   totalPoints: number;
-  badgeLevel: 'Bronze' | 'Silver' | 'Gold' | null;
+  badgeLevel: 'none' | 'iron' | 'bronze' | 'silver' | 'gold' | 'platinum' | 'No Badge' | null;
 };
 
 export type Student = {
@@ -40,6 +40,7 @@ export type Student = {
   joinedClubs: string[];
   badges: string[];
   badge: string; // Added this line
+  role: string;
 };
 
 export type AppState = {
@@ -48,7 +49,8 @@ export type AppState = {
   clubMemberships: { membership_id: number; user_id: number; club_id: number }[];
   badges: { badge_id: number; badge_name: string; badge_type: string; description: string; points_required: number }[];
   userBadges: { user_badge_id: number; user_id: number; badge_id: number }[];
-  currentUser: Student | null;
+  activityLog: { log_id: number; name: string; action: string; timestamp: string }[];
+  currentUser: any | null;
   userRole: UserRole;
   currentPage: string;
   token: string | null;
@@ -61,6 +63,7 @@ function App() {
     clubMemberships: [],
     badges: [],
     userBadges: [],
+    activityLog: [],
     currentUser: null,
     userRole: null,
     currentPage: 'login',
@@ -72,19 +75,21 @@ function App() {
 
     if (updates.currentUser && updates.token) {
       try {
-        const [clubsRes, studentsRes, membersRes, badgesRes, userBadgesRes] = await Promise.all([
+        const [clubsRes, usersRes, membersRes, badgesRes, userBadgesRes, activityLogRes] = await Promise.all([
           fetch('http://localhost:3001/api/clubs'),
           fetch('http://localhost:3001/api/users'),
           fetch('http://localhost:3001/api/club-members'),
           fetch('http://localhost:3001/api/badges'),
           fetch('http://localhost:3001/api/user-badges'),
+          fetch('http://localhost:3001/api/activity-log'),
         ]);
 
         const rawClubs = await clubsRes.json();
-        const rawStudents = await studentsRes.json();
+        const rawUsers = await usersRes.json();
         const clubMemberships = await membersRes.json();
         const badges = await badgesRes.json();
         const userBadges = await userBadgesRes.json();
+        const activityLog = await activityLogRes.json();
 
         // --- Data Transformation ---
         const clubs: Club[] = rawClubs.map((c: any) => ({
@@ -99,10 +104,11 @@ function App() {
           badgeLevel: c.badge,
         }));
 
-        const students: Student[] = rawStudents.map((s: any) => ({
+        const allUsers: Student[] = rawUsers.map((s: any) => ({
           id: String(s.user_id),
           name: s.name,
           email: s.email,
+          role: s.role,
           faculty: 'Computing & IT', // Placeholder
           avatar: `https://picsum.photos/seed/${s.user_id}/200`,
           totalPoints: s.total_points,
@@ -114,8 +120,10 @@ function App() {
           badge: s.badge, // Added this line
         }));
 
+        const students: Student[] = allUsers.filter((u) => u.role === 'student');
+
         // Find the fresh user object from the fetched students list
-        const freshCurrentUser = students.find(student => student.id === String(updates.currentUser?.user_id));
+        const freshCurrentUser = allUsers.find(user => user.id === String(updates.currentUser?.user_id));
 
         const finalClubs = updates.clubs || clubs; // Determine which clubs array to use
 
@@ -126,6 +134,7 @@ function App() {
           clubMemberships,
           badges,
           userBadges,
+          activityLog,
           currentUser: freshCurrentUser || prev.currentUser
         }));
 

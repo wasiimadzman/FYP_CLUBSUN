@@ -27,6 +27,7 @@ CREATE TABLE `clubs` (
   `club_id` INT AUTO_INCREMENT PRIMARY KEY,
   `club_name` VARCHAR(100) NOT NULL,
   `description` TEXT,
+  `logo` VARCHAR(255) DEFAULT 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=200&h=200&fit=crop',
   `capacity` INT DEFAULT 30,
   `current_members` INT DEFAULT 0,
   `total_points` INT DEFAULT 0,

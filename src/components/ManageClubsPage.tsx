@@ -40,25 +40,22 @@ type ManageClubsPageProps = {
   updateAppState: (updates: Partial<AppState>) => void;
 };
 
+
+
 export default function ManageClubsPage({ appState, updateAppState }: ManageClubsPageProps) {
   const { clubs } = appState;
   const [searchQuery, setSearchQuery] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('all');
   const [editingClub, setEditingClub] = useState<Club | null>(null);
   const [deletingClubId, setDeletingClubId] = useState<string | null>(null);
   
   // Edit form state
   const [editName, setEditName] = useState('');
   const [editDescription, setEditDescription] = useState('');
-  const [editCategory, setEditCategory] = useState('');
-  const [editMaxMembers, setEditMaxMembers] = useState('');
-
-  const categories = Array.from(new Set(clubs.map(club => club.category)));
+  const [editImageUrl, setEditImageUrl] = useState('');
 
   const filteredClubs = clubs.filter((club) => {
     const matchesSearch = club.name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = categoryFilter === 'all' || club.category === categoryFilter;
-    return matchesSearch && matchesCategory;
+    return matchesSearch;
   });
 
   const handleLogout = () => {
@@ -73,43 +70,71 @@ export default function ManageClubsPage({ appState, updateAppState }: ManageClub
     setEditingClub(club);
     setEditName(club.name);
     setEditDescription(club.description);
-    setEditCategory(club.category);
-    setEditMaxMembers(club.maxMembers.toString());
+    setEditImageUrl(club.logo);
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!editingClub) return;
 
-    const updatedClubs = clubs.map((club) =>
-      club.id === editingClub.id
-        ? {
-            ...club,
-            name: editName,
-            description: editDescription,
-            category: editCategory,
-            maxMembers: parseInt(editMaxMembers) || 30,
-          }
-        : club
-    );
+    try {
+      const response = await fetch(`http://localhost:3001/api/clubs/${editingClub.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          clubName: editName,
+          description: editDescription,
+          imageUrl: editImageUrl,
+        }),
+      });
 
-    updateAppState({ clubs: updatedClubs });
-    toast.success('Club updated successfully!');
-    setEditingClub(null);
+      const updatedClub = await response.json();
+
+      if (response.ok) {
+        const updatedClubs = clubs.map((club) =>
+          club.id === editingClub.id ? updatedClub : club
+        );
+
+        updateAppState({ clubs: updatedClubs });
+        toast.success('Club updated successfully!');
+        setEditingClub(null);
+      } else {
+        toast.error(updatedClub.message || 'Failed to update club');
+      }
+    } catch (error) {
+      toast.error('An error occurred while updating the club.');
+      console.error('Update club error:', error);
+    }
   };
 
   const handleDelete = (clubId: string) => {
     setDeletingClubId(clubId);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (!deletingClubId) return;
 
-    const clubToDelete = clubs.find(c => c.id === deletingClubId);
-    const updatedClubs = clubs.filter((club) => club.id !== deletingClubId);
-    
-    updateAppState({ clubs: updatedClubs });
-    toast.success(`Club "${clubToDelete?.name}" deleted successfully!`);
-    setDeletingClubId(null);
+    try {
+      const response = await fetch(`http://localhost:3001/api/clubs/${deletingClubId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        const clubToDelete = clubs.find(c => c.id === deletingClubId);
+        const updatedClubs = clubs.filter((club) => club.id !== deletingClubId);
+        
+        updateAppState({ clubs: updatedClubs });
+        toast.success(`Club "${clubToDelete?.name}" deleted successfully!`);
+        setDeletingClubId(null);
+      } else {
+        const data = await response.json();
+        toast.error(data.message || 'Failed to delete club');
+      }
+    } catch (error) {
+      toast.error('An error occurred while deleting the club.');
+      console.error('Delete club error:', error);
+    }
   };
 
   return (
@@ -184,25 +209,7 @@ export default function ManageClubsPage({ appState, updateAppState }: ManageClub
                 className="pl-10 bg-[#1E3E62] border-gray-600 text-white placeholder:text-gray-500 focus:border-[#FF6500]"
               />
             </div>
-            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="w-full md:w-48 bg-[#1E3E62] border-gray-600 text-white focus:border-[#FF6500]">
-                <SelectValue placeholder="Category" />
-              </SelectTrigger>
-              <SelectContent className="bg-[#1E3E62] border-gray-600">
-                <SelectItem value="all" className="text-white hover:bg-[#FF6500]/10">
-                  All Categories
-                </SelectItem>
-                {categories.map(category => (
-                  <SelectItem 
-                    key={category} 
-                    value={category}
-                    className="text-white hover:bg-[#FF6500]/10"
-                  >
-                    {category}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+
           </div>
 
           {/* Clubs Table */}
@@ -216,7 +223,6 @@ export default function ManageClubsPage({ appState, updateAppState }: ManageClub
                   <TableHeader>
                     <TableRow className="border-gray-700 hover:bg-transparent">
                       <TableHead className="text-gray-400">Club Name</TableHead>
-                      <TableHead className="text-gray-400">Category</TableHead>
                       <TableHead className="text-gray-400">Members</TableHead>
                       <TableHead className="text-gray-400">Points</TableHead>
                       <TableHead className="text-gray-400">Badge</TableHead>
@@ -236,11 +242,6 @@ export default function ManageClubsPage({ appState, updateAppState }: ManageClub
                             <span className="text-white">{club.name}</span>
                           </div>
                         </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="border-gray-500 text-gray-400">
-                            {club.category}
-                          </Badge>
-                        </TableCell>
                         <TableCell className="text-white">
                           {club.currentMembers}/{club.maxMembers}
                         </TableCell>
@@ -248,21 +249,25 @@ export default function ManageClubsPage({ appState, updateAppState }: ManageClub
                           {club.totalPoints}
                         </TableCell>
                         <TableCell>
-                          {club.badgeLevel ? (
+                          {club.badgeLevel && club.badgeLevel !== 'none' ? (
                             <Badge
                               className={`${
                                 club.badgeLevel === 'Gold'
                                   ? 'bg-yellow-500 text-black'
                                   : club.badgeLevel === 'Silver'
                                   ? 'bg-gray-300 text-black'
-                                  : 'bg-orange-600 text-white'
+                                  : club.badgeLevel === 'Platinum'
+                                  ? 'bg-blue-400 text-white'
+                                  : club.badgeLevel === 'Iron'
+                                  ? 'bg-gray-500 text-white'
+                                  : 'bg-orange-600 text-white' // Default for Bronze
                               }`}
                             >
                               <Award className="w-3 h-3 mr-1" />
                               {club.badgeLevel}
                             </Badge>
                           ) : (
-                            <span className="text-gray-500">No Badge</span>
+                            <span className="text-gray-500">None</span>
                           )}
                         </TableCell>
                         <TableCell className="text-right">
@@ -330,27 +335,11 @@ export default function ManageClubsPage({ appState, updateAppState }: ManageClub
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-category" className="text-white">Category</Label>
-              <Select value={editCategory} onValueChange={setEditCategory}>
-                <SelectTrigger className="bg-[#0B192C] border-gray-600 text-white focus:border-[#FF6500]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-[#1E3E62] border-gray-600">
-                  {['Arts', 'Technology', 'Sports', 'Social', 'Games', 'Academic', 'Other'].map(cat => (
-                    <SelectItem key={cat} value={cat} className="text-white hover:bg-[#FF6500]/10">
-                      {cat}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-max-members" className="text-white">Max Members</Label>
+              <Label htmlFor="edit-image-url" className="text-white">Image URL</Label>
               <Input
-                id="edit-max-members"
-                type="number"
-                value={editMaxMembers}
-                onChange={(e) => setEditMaxMembers(e.target.value)}
+                id="edit-image-url"
+                value={editImageUrl}
+                onChange={(e) => setEditImageUrl(e.target.value)}
                 className="bg-[#0B192C] border-gray-600 text-white focus:border-[#FF6500]"
               />
             </div>

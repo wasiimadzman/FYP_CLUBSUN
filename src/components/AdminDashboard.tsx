@@ -10,20 +10,14 @@ type AdminDashboardProps = {
 };
 
 export default function AdminDashboard({ appState, updateAppState }: AdminDashboardProps) {
-  const { clubs, students } = appState;
+  const { clubs, students, activityLog } = appState;
 
   const totalClubs = clubs.length;
   const totalStudents = students.length;
   const totalMembers = clubs.reduce((sum, club) => sum + club.currentMembers, 0);
   const topClub = [...clubs].sort((a, b) => b.totalPoints - a.totalPoints)[0];
 
-  const recentActivity = [
-    { id: 1, text: 'Student joined Photography Club', time: '5 minutes ago' },
-    { id: 2, text: 'Coding Society reached Gold badge', time: '1 hour ago' },
-    { id: 3, text: 'New club created: Chess Club', time: '2 hours ago' },
-    { id: 4, text: 'Basketball Team gained 5 new members', time: '3 hours ago' },
-    { id: 5, text: 'Environmental Society unlocked Silver badge', time: '5 hours ago' },
-  ];
+  const recentActivity = activityLog.slice(0, 5);
 
   const handleLogout = () => {
     updateAppState({
@@ -135,6 +129,7 @@ export default function AdminDashboard({ appState, updateAppState }: AdminDashbo
               <CardContent>
                 <div className="text-white">{topClub?.name || 'N/A'}</div>
                 <p className="text-gray-400 mt-1">{topClub?.totalPoints || 0} points</p>
+                {topClub?.badge && <Badge className="mt-2">{topClub.badge}</Badge>}
               </CardContent>
             </Card>
           </div>
@@ -149,13 +144,13 @@ export default function AdminDashboard({ appState, updateAppState }: AdminDashbo
                 <div className="space-y-4">
                   {recentActivity.map((activity) => (
                     <div
-                      key={activity.id}
+                      key={activity.log_id}
                       className="flex items-start gap-3 p-3 rounded-lg bg-[#0B192C] border border-[#FF6500]/10"
                     >
                       <div className="w-2 h-2 rounded-full bg-[#FF6500] mt-2" />
                       <div className="flex-1">
-                        <p className="text-white">{activity.text}</p>
-                        <p className="text-gray-400 mt-1">{activity.time}</p>
+                        <p className="text-white">{activity.action}</p>
+                        <p className="text-gray-400 mt-1">{new Date(activity.timestamp).toLocaleString()}</p>
                       </div>
                     </div>
                   ))}
@@ -182,17 +177,9 @@ export default function AdminDashboard({ appState, updateAppState }: AdminDashbo
                           <span className="text-gray-400">#{index + 1}</span>
                         )}
                       </div>
-                      <img
-                        src={club.logo}
-                        alt={club.name}
-                        className="w-12 h-12 rounded-lg object-cover"
-                      />
                       <div className="flex-1">
                         <h4 className="text-white">{club.name}</h4>
                         <div className="flex items-center gap-2 mt-1">
-                          <Badge variant="outline" className="border-gray-500 text-gray-400">
-                            {club.category}
-                          </Badge>
                           {club.badgeLevel && (
                             <Badge
                               className={`${

@@ -54,10 +54,16 @@ export default function ExploreClubsPage({ appState, updateAppState }: ExploreCl
 
       console.log('DEBUG: Backend data.club.current_members:', data.club.current_members);
 
+      const newLevel = Math.floor(data.user.total_points / 20) + 1;
+      if (newLevel !== currentUser.level) {
+        toast.info(`🎉 You've reached Level ${newLevel}!`);
+      }
+
       // Update frontend state with data from backend
       const updatedUser = {
         ...currentUser,
         totalPoints: data.user.total_points,
+        level: newLevel,
         badge: data.user.badge,
         joinedClubs: [...currentUser.joinedClubs, clubId], // Add the newly joined club ID
       };
@@ -238,7 +244,7 @@ export default function ExploreClubsPage({ appState, updateAppState }: ExploreCl
                     alt={club.name}
                     className="w-full h-48 object-cover"
                   />
-                  {club.badgeLevel && (
+                  {club.badgeLevel && club.badgeLevel !== 'none' ? (
                     <div className="absolute top-3 right-3">
                       <Badge
                         className={`${
@@ -246,11 +252,22 @@ export default function ExploreClubsPage({ appState, updateAppState }: ExploreCl
                             ? 'bg-yellow-500 text-black'
                             : club.badgeLevel === 'Silver'
                             ? 'bg-gray-300 text-black'
-                            : 'bg-orange-600 text-white'
+                            : club.badgeLevel === 'Platinum'
+                            ? 'bg-blue-400 text-white'
+                            : club.badgeLevel === 'Iron'
+                            ? 'bg-gray-500 text-white'
+                            : 'bg-orange-600 text-white' // Default for Bronze
                         }`}
                       >
                         <Award className="w-3 h-3 mr-1" />
                         {club.badgeLevel}
+                      </Badge>
+                    </div>
+                  ) : (
+                    <div className="absolute top-3 right-3">
+                      <Badge className="bg-gray-500 text-white">
+                        <Award className="w-3 h-3 mr-1" />
+                        None
                       </Badge>
                     </div>
                   )}

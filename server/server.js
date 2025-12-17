@@ -59,6 +59,8 @@ app.get('/api/users', async (req, res) => {
     }
 });
 
+
+
 app.get('/api/clubs', async (req, res) => {
     try {
         const [rows] = await db.query('SELECT * FROM clubs');
@@ -100,6 +102,23 @@ app.get('/api/user-badges', async (req, res) => {
     }
 });
 
+app.get('/api/activity-log', async (req, res) => {
+    try {
+        const [rows] = await db.query(`
+            SELECT a.log_id, u.name, a.action, a.timestamp 
+            FROM activity_log a
+            JOIN users u ON a.user_id = u.user_id
+            ORDER BY a.timestamp DESC
+        `);
+        res.json(rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Server error');
+    }
+});
+
+
+
 // Helper function to calculate student badge
 const getStudentBadge = (points) => {
     if (points >= 60) return 'gold';
@@ -136,7 +155,7 @@ app.post('/api/clubs/join', async (req, res) => {
         }
 
         // 2. Check club capacity
-        const [clubRows] = await db.query('SELECT current_members, capacity FROM clubs WHERE club_id = ?', [clubId]);
+        const [clubRows] = await db.query('SELECT current_members, capacity, club_name FROM clubs WHERE club_id = ?', [clubId]);
         if (clubRows.length === 0) {
             return res.status(404).json({ message: 'Club not found' });
         }
@@ -149,21 +168,21 @@ app.post('/api/clubs/join', async (req, res) => {
         await db.query('INSERT INTO club_members (user_id, club_id) VALUES (?, ?)', [userId, clubId]);
 
         // 4. Update student's points and badge
-        const [userRows] = await db.query('SELECT total_points FROM users WHERE user_id = ?', [userId]);
+        const [userRows] = await db.query('SELECT total_points, name FROM users WHERE user_id = ?', [userId]);
         if (userRows.length === 0) {
             return res.status(404).json({ message: 'User not found' });
         }
         const currentUserPoints = userRows[0].total_points;
-                    const newStudentPoints = currentUserPoints + 10; // Students earn 10 points for every club they join
-                    const newStudentBadge = getStudentBadge(newStudentPoints);
-        
-                    console.log('DEBUG: newStudentPoints:', newStudentPoints);
-                    console.log('DEBUG: newStudentBadge:', newStudentBadge);
-        
-                    await db.query(
-                        'UPDATE users SET total_points = ?, badge = ? WHERE user_id = ?',
-                        [newStudentPoints, newStudentBadge, userId]
-                    );
+        const newStudentPoints = currentUserPoints + 10; // Students earn 10 points for every club they join
+        const newStudentBadge = getStudentBadge(newStudentPoints);
+
+        console.log('DEBUG: newStudentPoints:', newStudentPoints);
+        console.log('DEBUG: newStudentBadge:', newStudentBadge);
+
+        await db.query(
+            'UPDATE users SET total_points = ?, badge = ? WHERE user_id = ?',
+            [newStudentPoints, newStudentBadge, userId]
+        );
         // 5. Recalculate club's total points and badge
         // Get all members' points for this club
         const [memberPointsRows] = await db.query(
@@ -181,7 +200,12 @@ app.post('/api/clubs/join', async (req, res) => {
             [newClubTotalPoints, newClubBadge, clubId]
         );
 
-        // 6. Fetch updated user and club data to send back
+        // 6. Log activity
+        const studentName = userRows[0].name;
+        const clubName = club.club_name;
+        await db.query('INSERT INTO activity_log (user_id, action) VALUES (?, ?)', [userId, `${studentName} joined ${clubName}`]);
+
+        // 7. Fetch updated user and club data to send back
         const [updatedUserRows] = await db.query('SELECT user_id as id, name, email, role, total_points, badge FROM users WHERE user_id = ?', [userId]);
         const [updatedClubRows] = await db.query('SELECT club_id as id, club_name as name, description, current_members, capacity as max_members, total_points, badge as badgeLevel FROM clubs WHERE club_id = ?', [clubId]);
 
@@ -241,7 +265,7 @@ app.post('/api/clubs/leave', async (req, res) => {
         }
 
         // 2. Get student's current points BEFORE deduction for club calculation
-        const [userRowsBeforeLeave] = await db.query('SELECT total_points FROM users WHERE user_id = ?', [userId]);
+        const [userRowsBeforeLeave] = await db.query('SELECT total_points, name FROM users WHERE user_id = ?', [userId]);
         if (userRowsBeforeLeave.length === 0) {
             return res.status(404).json({ message: 'User not found' });
         }
@@ -273,7 +297,14 @@ app.post('/api/clubs/leave', async (req, res) => {
             [newClubTotalPoints, newClubBadge, clubId]
         );
 
-        // 6. Fetch updated user and club data to send back
+        // 6. Log activity
+        const [clubRows] = await db.query('SELECT club_name FROM clubs WHERE club_id = ?', [clubId]);
+        const studentName = userRowsBeforeLeave[0].name;
+        const clubName = clubRows[0].club_name;
+        await db.query('INSERT INTO activity_log (user_id, action) VALUES (?, ?)', [userId, `${studentName} left ${clubName}`]);
+
+
+        // 7. Fetch updated user and club data to send back
         const [updatedUserRows] = await db.query('SELECT user_id as id, name, email, role, total_points, badge FROM users WHERE user_id = ?', [userId]);
         const [updatedClubRows] = await db.query('SELECT club_id as id, club_name as name, description, current_members, capacity as max_members, total_points, badge as badgeLevel FROM clubs WHERE club_id = ?', [clubId]);
 
@@ -283,6 +314,86 @@ app.post('/api/clubs/leave', async (req, res) => {
             club: updatedClubRows[0],
         });
 
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Server error');
+    }
+});
+
+app.post('/api/clubs/create', async (req, res) => {
+    const { clubName, description, imageUrl } = req.body;
+
+    if (!clubName || !description) {
+        return res.status(400).json({ message: 'Club name and description are required' });
+    }
+
+    try {
+        const [result] = await db.query(
+            'INSERT INTO clubs (club_name, description, logo, capacity, current_members, total_points, badge) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [clubName, description, imageUrl, 30, 0, 0, 'none']
+        );
+
+        const insertId = result.insertId;
+
+        const [rows] = await db.query('SELECT club_id as id, club_name as name, description, logo, current_members, capacity as maxMembers, total_points, badge as badgeLevel FROM clubs WHERE club_id = ?', [insertId]);
+
+        res.json(rows[0]);
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Server error');
+    }
+});
+
+app.put('/api/clubs/:clubId', async (req, res) => {
+    const { clubId } = req.params;
+    const { clubName, description, imageUrl } = req.body;
+
+    if (!clubName || !description) {
+        return res.status(400).json({ message: 'Club name and description are required' });
+    }
+
+    try {
+        await db.query(
+            'UPDATE clubs SET club_name = ?, description = ?, logo = ? WHERE club_id = ?',
+            [clubName, description, imageUrl, clubId]
+        );
+
+        const [rows] = await db.query('SELECT club_id as id, club_name as name, description, logo, current_members, capacity as maxMembers, total_points, badge as badgeLevel FROM clubs WHERE club_id = ?', [clubId]);
+
+        res.json(rows[0]);
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Server error');
+    }
+});
+
+app.delete('/api/clubs/:clubId', async (req, res) => {
+    const { clubId } = req.params;
+
+    try {
+        // 1. Get all members of the club
+        const [members] = await db.query('SELECT user_id FROM club_members WHERE club_id = ?', [clubId]);
+
+        // 2. For each member, deduct 10 points and update their badge
+        for (const member of members) {
+            const [userRows] = await db.query('SELECT total_points FROM users WHERE user_id = ?', [member.user_id]);
+            const currentUserPoints = userRows[0].total_points;
+            const newStudentPoints = Math.max(0, currentUserPoints - 10);
+            const newStudentBadge = getStudentBadge(newStudentPoints);
+
+            await db.query(
+                'UPDATE users SET total_points = ?, badge = ? WHERE user_id = ?',
+                [newStudentPoints, newStudentBadge, member.user_id]
+            );
+        }
+
+        // 3. Delete all memberships for the club
+        await db.query('DELETE FROM club_members WHERE club_id = ?', [clubId]);
+
+        // 4. Delete the club
+        await db.query('DELETE FROM clubs WHERE club_id = ?', [clubId]);
+
+        res.json({ message: 'Club deleted successfully' });
     } catch (err) {
         console.error(err);
         res.status(500).send('Server error');

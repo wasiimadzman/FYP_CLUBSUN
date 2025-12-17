@@ -1,13 +1,12 @@
 import { useState } from 'react';
-import { AppState, Club } from '../App';
+import { AppState } from '../App';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { LogOut, Plus, TrendingUp, Settings, Upload, Users } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 type CreateClubPageProps = {
   appState: AppState;
@@ -17,11 +16,7 @@ type CreateClubPageProps = {
 export default function CreateClubPage({ appState, updateAppState }: CreateClubPageProps) {
   const [clubName, setClubName] = useState('');
   const [description, setDescription] = useState('');
-  const [category, setCategory] = useState('');
-  const [maxMembers, setMaxMembers] = useState('30');
   const [imageUrl, setImageUrl] = useState('');
-
-  const categories = ['Arts', 'Technology', 'Sports', 'Social', 'Games', 'Academic', 'Other'];
 
   const handleLogout = () => {
     updateAppState({
@@ -31,43 +26,52 @@ export default function CreateClubPage({ appState, updateAppState }: CreateClubP
     });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!clubName || !description || !category) {
+    if (!clubName || !description) {
       toast.error('Please fill in all required fields');
       return;
     }
 
-    const newClub: Club = {
-      id: `club-${Date.now()}`,
-      name: clubName,
-      description,
-      category,
-      logo: imageUrl || 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=200&h=200&fit=crop',
-      currentMembers: 0,
-      maxMembers: parseInt(maxMembers) || 30,
-      totalPoints: 0,
-      badgeLevel: null,
-    };
+    try {
+      const response = await fetch('http://localhost:3001/api/clubs/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          clubName,
+          description,
+          imageUrl: imageUrl || 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=200&h=200&fit=crop',
+        }),
+      });
 
-    updateAppState({
-      clubs: [...appState.clubs, newClub],
-    });
+      const newClub = await response.json();
 
-    toast.success(`Club "${clubName}" created successfully!`);
+      if (response.ok) {
+        updateAppState({
+          clubs: [...appState.clubs, newClub],
+        });
 
-    // Reset form
-    setClubName('');
-    setDescription('');
-    setCategory('');
-    setMaxMembers('30');
-    setImageUrl('');
+        toast.success(`Club "${clubName}" created successfully!`);
 
-    // Navigate back to manage clubs
-    setTimeout(() => {
-      updateAppState({ currentPage: 'manage-clubs' });
-    }, 1500);
+        // Reset form
+        setClubName('');
+        setDescription('');
+        setImageUrl('');
+
+        // Navigate back to manage clubs
+        setTimeout(() => {
+          updateAppState({ currentPage: 'manage-clubs' });
+        }, 1500);
+      } else {
+        toast.error(newClub.message || 'Failed to create club');
+      }
+    } catch (error) {
+      toast.error('An error occurred while creating the club.');
+      console.error('Create club error:', error);
+    }
   };
 
   return (
@@ -166,44 +170,6 @@ export default function CreateClubPage({ appState, updateAppState }: CreateClubP
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="category" className="text-white">
-                        Category *
-                      </Label>
-                      <Select value={category} onValueChange={setCategory} required>
-                        <SelectTrigger className="bg-[#0B192C] border-gray-600 text-white focus:border-[#FF6500]">
-                          <SelectValue placeholder="Select a category" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-[#1E3E62] border-gray-600">
-                          {categories.map((cat) => (
-                            <SelectItem
-                              key={cat}
-                              value={cat}
-                              className="text-white hover:bg-[#FF6500]/10"
-                            >
-                              {cat}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="max-members" className="text-white">
-                        Maximum Members
-                      </Label>
-                      <Input
-                        id="max-members"
-                        type="number"
-                        min="1"
-                        placeholder="30"
-                        value={maxMembers}
-                        onChange={(e) => setMaxMembers(e.target.value)}
-                        className="bg-[#0B192C] border-gray-600 text-white placeholder:text-gray-500 focus:border-[#FF6500]"
-                      />
-                      <p className="text-gray-400">Default: 30 members</p>
-                    </div>
-
-                    <div className="space-y-2">
                       <Label htmlFor="image-url" className="text-white">
                         Cover Image URL
                       </Label>
@@ -268,14 +234,9 @@ export default function CreateClubPage({ appState, updateAppState }: CreateClubP
                         {description || 'Club description will appear here...'}
                       </p>
                       <div className="flex items-center justify-between mb-4">
-                        {category && (
-                          <span className="px-3 py-1 rounded-full text-sm border border-gray-500 text-gray-400">
-                            {category}
-                          </span>
-                        )}
                         <div className="flex items-center gap-2 text-gray-400">
                           <Users className="w-4 h-4" />
-                          <span>0/{maxMembers || '30'}</span>
+                          <span>0/30</span>
                         </div>
                       </div>
                       <Button
