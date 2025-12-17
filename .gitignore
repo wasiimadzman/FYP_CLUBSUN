@@ -250,7 +250,6 @@ _darcs/
 .env.backup
 .env.sample
 .env.template
-.env.example
 .env.defaults
 .env.shared
 .env.private
@@ -405,3 +404,5 @@ _darcs/
 .env.private.example
 .env.secret.example
 .env.vault.example
+/node_modules
+/server/node_modules
